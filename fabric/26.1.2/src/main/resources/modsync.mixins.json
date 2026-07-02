@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "com.modsync.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"ServerStatusMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

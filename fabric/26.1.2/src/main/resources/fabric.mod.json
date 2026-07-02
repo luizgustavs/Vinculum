@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "modsync",
+	"version": "${version}",
+	"name": "Vinculum",
+	"description": "A Fabric mod for synchronizing Minecraft mods.",
+	"icon": "assets/modsync/icon.png",
+	"authors": [
+		"amovcs"
+	],
+	"license": "MIT",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.modsync.ModSync"
+		]
+	},
+	"mixins": [
+		"modsync.mixins.json",
+		{
+			"config": "modsync.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}

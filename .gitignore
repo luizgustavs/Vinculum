@@ -1,0 +1,36 @@
+# Local/reference files that are not part of the mod source.
+arquivos/
+
+# Gradle and build outputs.
+.gradle/
+build/
+out/
+classes/
+
+# Fabric/Loom runtime directory.
+run/
+
+# IDE/editor metadata.
+.idea/
+.vscode/
+.settings/
+*.iml
+*.ipr
+*.iws
+*.launch
+.classpath
+.project
+bin/
+
+# OS and logs/dumps.
+.DS_Store
+Thumbs.db
+hs_err_*.log
+replay_*.log
+*.hprof
+*.jfr
+
+# Keep the Gradle Wrapper files needed to build from a fresh clone.
+!gradle/wrapper/gradle-wrapper.jar
+!gradlew
+!gradlew.bat

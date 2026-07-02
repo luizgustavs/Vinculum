@@ -1,0 +1,20 @@
+{
+	"required": true,
+	"package": "com.modsync.mixin.client",
+	"compatibilityLevel": "JAVA_25",
+	"client": [
+		"EntryPositionMixin",
+		"LanServerListMixin",
+		"LanServerDetectorMixin",
+		"LanServerMixin",
+		"LanServerPingerMixin",
+		"JoinMultiplayerScreenMixin",
+		"NetworkServerEntryMixin",
+		"OnlineServerEntryMixin",
+		"ServerDataMixin",
+		"ServerStatusListenerMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
