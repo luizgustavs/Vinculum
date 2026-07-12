@@ -3,6 +3,7 @@ package com.modsync.status;
 import com.modsync.ModSync;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -112,7 +113,18 @@ public final class ModComparisonScreen extends Screen {
 	}
 
 	private void download(Comparison comparison) {
-		if (!comparison.canDownload()) {
+		if (!comparison.canDownload(this.serverInfo.allowServerTransfers())) {
+			return;
+		}
+		if (comparison.modrinthState == ModrinthState.UNAVAILABLE) {
+			this.minecraft.setScreen(new ServerDownloadWarningScreen(
+				this,
+				this.serverAddress,
+				List.of(comparison.serverMod()),
+				() -> this.downloadFromServer(comparison),
+				() -> {
+				}
+			));
 			return;
 		}
 		comparison.state = DownloadState.DOWNLOADING;
@@ -125,24 +137,79 @@ public final class ModComparisonScreen extends Screen {
 		}));
 	}
 
+	private void downloadFromServer(Comparison comparison) {
+		comparison.state = DownloadState.DOWNLOADING;
+		this.startProgress(0, 1);
+		ModDownloader.downloadFromServer(comparison.serverMod(), this.serverAddress, this.serverInfo.transferPort()).thenAccept(result -> this.minecraft.execute(() -> {
+			comparison.detail = result.detail();
+			comparison.state = result.success() ? DownloadState.DOWNLOADED : DownloadState.FAILED;
+			this.updateProgress(result.success() ? 1 : 0, 1);
+			this.updateBottomButtons();
+		}));
+	}
+
 	private void syncNecessary() {
-		this.runSync(progress -> ModSyncService.syncNecessary(this.serverInfo, this.serverAddress, progress), false);
+		this.prepareSync(false);
 	}
 
 	private void fullSync() {
-		this.runSync(progress -> ModSyncService.fullSync(this.serverInfo, this.serverAddress, progress), true);
+		this.prepareSync(true);
 	}
 
-	private void runSync(Function<Consumer<ModSyncService.Result>, java.util.concurrent.CompletableFuture<ModSyncService.Result>> sync, boolean includeClientOnlyMissing) {
+	private void prepareSync(boolean fullSync) {
 		if (this.syncing) {
 			return;
 		}
 		this.syncing = true;
+		this.syncStatus = Component.translatable("modsync.mods.checking_sources");
+		this.showProgress = false;
+		this.updateBottomButtons();
+		ModSyncService.serverDownloadsFor(this.serverInfo, fullSync).thenAccept(serverMods -> this.minecraft.execute(() -> {
+			if (!serverMods.isEmpty() && !this.serverInfo.allowServerTransfers()) {
+				this.syncing = false;
+				this.syncStatus = Component.translatable("modsync.mods.sync_failed", Component.translatable("modsync.mods.server_transfers_disabled"));
+				this.updateBottomButtons();
+				return;
+			}
+			Set<String> trustedMods = serverMods.stream().map(ModEntry::id).collect(Collectors.toUnmodifiableSet());
+			if (serverMods.isEmpty()) {
+				this.runSync(fullSync, trustedMods);
+				return;
+			}
+			this.minecraft.setScreen(new ServerDownloadWarningScreen(
+				this,
+				this.serverAddress,
+				serverMods,
+				() -> this.runSync(fullSync, trustedMods),
+				this::cancelPreparedSync
+			));
+		})).exceptionally(throwable -> {
+			ModSync.LOGGER.error("Could not determine sync download sources", throwable);
+			this.minecraft.execute(() -> {
+				this.syncing = false;
+				this.syncStatus = Component.translatable("modsync.mods.sync_failed", detail(throwable));
+				this.updateBottomButtons();
+			});
+			return null;
+		});
+	}
+
+	private void cancelPreparedSync() {
+		this.syncing = false;
+		this.syncStatus = Component.empty();
+		this.showProgress = false;
+		this.updateBottomButtons();
+	}
+
+	private void runSync(boolean fullSync, Set<String> trustedServerMods) {
 		this.syncStatus = Component.translatable("modsync.mods.syncing");
-		this.startProgress(0, this.expectedDownloads(includeClientOnlyMissing));
+		this.startProgress(0, this.expectedDownloads(fullSync));
 		this.updateBottomButtons();
 		Consumer<ModSyncService.Result> progress = result -> this.minecraft.execute(() -> this.updateProgress(result.completed(), result.total()));
-		sync.apply(progress).exceptionally(throwable -> {
+		java.util.concurrent.CompletableFuture<ModSyncService.Result> task = fullSync
+			? ModSyncService.fullSync(this.serverInfo, this.serverAddress, trustedServerMods, progress)
+			: ModSyncService.syncNecessary(this.serverInfo, this.serverAddress, trustedServerMods, progress);
+		task.exceptionally(throwable -> {
 			ModSync.LOGGER.error("Sync task failed unexpectedly", throwable);
 			return new ModSyncService.Result(false, 0, 0, "failed", detail(throwable));
 		}).thenAccept(result -> this.minecraft.execute(() -> {
@@ -152,7 +219,7 @@ public final class ModComparisonScreen extends Screen {
 				: syncFailed(result);
 			if (result.success()) {
 				this.comparisons.stream()
-					.filter(comparison -> comparison.downloadRequired() || comparison.versionMismatch() || (includeClientOnlyMissing && comparison.clientOnlyMissing()))
+					.filter(comparison -> comparison.downloadRequired() || comparison.versionMismatch() || (fullSync && comparison.clientOnlyMissing()))
 					.forEach(Comparison::markDownloaded);
 			}
 			this.updateBottomButtons();
@@ -215,6 +282,7 @@ public final class ModComparisonScreen extends Screen {
 				comparison.modrinthState = ModrinthState.CHECKING;
 				ModDownloader.existsOnModrinth(comparison.serverMod(), this.minecraftVersion).thenAccept(available -> Minecraft.getInstance().execute(() -> {
 					comparison.modrinthState = available ? ModrinthState.AVAILABLE : ModrinthState.UNAVAILABLE;
+					this.updateBottomButtons();
 				}));
 			});
 	}
@@ -226,7 +294,7 @@ public final class ModComparisonScreen extends Screen {
 		this.necessarySyncButton.setPosition(this.width / 2 - 200, this.height - 60);
 		this.fullSyncButton.setPosition(this.width / 2 + 4, this.height - 60);
 		this.necessarySyncButton.active = !this.syncing;
-		this.fullSyncButton.active = !this.syncing && this.serverInfo.allowServerTransfers();
+		this.fullSyncButton.active = !this.syncing;
 		boolean allDownloaded = this.comparisons.stream().filter(Comparison::downloadRequired).allMatch(Comparison::downloaded)
 			&& this.comparisons.stream().anyMatch(Comparison::downloaded);
 		this.closeGameButton.visible = allDownloaded;
@@ -243,6 +311,9 @@ public final class ModComparisonScreen extends Screen {
 	private static Component syncFailed(ModSyncService.Result result) {
 		if ("server_transfers_disabled".equals(result.messageKey())) {
 			return Component.translatable("modsync.mods.sync_failed", Component.translatable("modsync.mods.server_transfers_disabled"));
+		}
+		if ("server_download_not_trusted".equals(result.messageKey())) {
+			return Component.translatable("modsync.mods.sync_failed", Component.translatable("modsync.mods.server_download_not_trusted"));
 		}
 		return Component.translatable("modsync.mods.sync_failed", result.detail());
 	}
@@ -299,8 +370,10 @@ public final class ModComparisonScreen extends Screen {
 			return this.missing();
 		}
 
-		private boolean canDownload() {
-			return this.downloadableMissing() && this.modrinthState == ModrinthState.AVAILABLE && this.state != DownloadState.DOWNLOADING && this.state != DownloadState.DOWNLOADED;
+		private boolean canDownload(boolean allowServerTransfers) {
+			return this.downloadableMissing()
+				&& (this.modrinthState == ModrinthState.AVAILABLE || (this.modrinthState == ModrinthState.UNAVAILABLE && allowServerTransfers))
+				&& this.state != DownloadState.DOWNLOADING && this.state != DownloadState.DOWNLOADED;
 		}
 
 		private boolean downloaded() {
@@ -316,7 +389,7 @@ public final class ModComparisonScreen extends Screen {
 		}
 
 		private boolean showDownloadButton() {
-			return this.downloadableMissing() && (this.modrinthState == ModrinthState.AVAILABLE || this.state == DownloadState.DOWNLOADING || this.state == DownloadState.DOWNLOADED || this.state == DownloadState.FAILED);
+			return this.downloadableMissing() && (this.modrinthState == ModrinthState.AVAILABLE || this.modrinthState == ModrinthState.UNAVAILABLE || this.state == DownloadState.DOWNLOADING || this.state == DownloadState.DOWNLOADED || this.state == DownloadState.FAILED);
 		}
 	}
 
@@ -411,7 +484,7 @@ public final class ModComparisonScreen extends Screen {
 				int right = this.getContentRight() - 3;
 				int bottom = top + 20;
 				boolean hovered = mouseX >= left && mouseX < right && mouseY >= top && mouseY < bottom;
-				boolean enabled = this.comparison.canDownload();
+				boolean enabled = this.comparison.canDownload(this.screen.serverInfo.allowServerTransfers());
 				graphics.fill(left, top, right, bottom, enabled ? (hovered ? 0xFF8A8A8A : 0xFF6A6A6A) : 0xFF3A3A3A);
 				graphics.fill(left + 1, top + 1, right - 1, bottom - 1, enabled ? 0xFF202020 : 0xFF181818);
 				Component label = Component.translatable(this.downloadLabelKey());
@@ -422,7 +495,7 @@ public final class ModComparisonScreen extends Screen {
 			public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 				int left = this.getContentRight() - BUTTON_WIDTH - 3;
 				int top = this.getContentY() + 5;
-				if (event.button() == 0 && event.x() >= left && event.x() < this.getContentRight() - 3 && event.y() >= top && event.y() < top + 20 && this.comparison.canDownload()) {
+				if (event.button() == 0 && event.x() >= left && event.x() < this.getContentRight() - 3 && event.y() >= top && event.y() < top + 20 && this.comparison.canDownload(this.screen.serverInfo.allowServerTransfers())) {
 					this.screen.download(this.comparison);
 					return true;
 				}
@@ -434,7 +507,7 @@ public final class ModComparisonScreen extends Screen {
 					case DOWNLOADING -> "modsync.mods.downloading";
 					case DOWNLOADED -> "modsync.mods.downloaded";
 					case FAILED -> "modsync.mods.retry";
-					case IDLE -> "modsync.mods.download";
+					case IDLE -> this.comparison.modrinthState == ModrinthState.UNAVAILABLE ? "modsync.mods.download_from_server" : "modsync.mods.download";
 				};
 			}
 

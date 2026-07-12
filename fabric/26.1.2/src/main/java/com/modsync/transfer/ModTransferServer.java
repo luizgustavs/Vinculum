@@ -2,6 +2,7 @@ package com.modsync.transfer;
 
 import com.modsync.ModSync;
 import com.modsync.ModSyncConfig;
+import com.modsync.JarFilter;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -107,6 +108,7 @@ public final class ModTransferServer {
 	private static Optional<Path> findModJar(String id) {
 		return FabricLoader.getInstance().getModContainer(id)
 			.filter(ModTransferServer::isUserMod)
+			.filter(JarFilter::shouldManage)
 			.flatMap(container -> container.getOrigin().getPaths().stream()
 				.filter(path -> Files.isRegularFile(path) && path.getFileName() != null)
 				.filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".jar"))

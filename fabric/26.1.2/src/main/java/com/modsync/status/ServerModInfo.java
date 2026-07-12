@@ -1,6 +1,7 @@
 package com.modsync.status;
 
 import com.modsync.ModSyncConfig;
+import com.modsync.JarFilter;
 import com.modsync.transfer.ModTransferServer;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
@@ -10,6 +11,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
@@ -43,12 +45,15 @@ public record ServerModInfo(String minecraftVersion, String fabricVersion, int t
 			.orElse("unknown");
 		List<ModEntry> mods = loader.getAllMods().stream()
 			.filter(ServerModInfo::isUserMod)
+			.filter(JarFilter::shouldManage)
 			.map(container -> new ModEntry(
 				container.getMetadata().getId(),
 				container.getMetadata().getName(),
 				container.getMetadata().getVersion().getFriendlyString(),
 				environmentName(container.getMetadata().getEnvironment()),
-				fileName(container)
+				fileName(container),
+				container.getMetadata().getAuthors().stream().map(author -> author.getName()).toList(),
+				fileSize(container)
 			))
 			.sorted(Comparator.comparing(ModEntry::name, String.CASE_INSENSITIVE_ORDER))
 			.toList();
@@ -61,6 +66,21 @@ public record ServerModInfo(String minecraftVersion, String fabricVersion, int t
 			.filter(name -> name.toLowerCase(java.util.Locale.ROOT).endsWith(".jar"))
 			.findFirst()
 			.orElse("");
+	}
+
+	private static long fileSize(ModContainer container) {
+		return container.getOrigin().getPaths().stream()
+			.filter(path -> Files.isRegularFile(path) && path.getFileName() != null)
+			.filter(path -> path.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".jar"))
+			.findFirst()
+			.map(path -> {
+				try {
+					return Files.size(path);
+				} catch (IOException exception) {
+					return -1L;
+				}
+			})
+			.orElse(-1L);
 	}
 
 	private static String environmentName(ModEnvironment environment) {

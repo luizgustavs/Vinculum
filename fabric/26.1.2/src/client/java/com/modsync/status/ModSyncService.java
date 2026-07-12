@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -20,9 +21,13 @@ final class ModSyncService {
 	}
 
 	static CompletableFuture<Result> syncNecessary(ServerModInfo serverInfo, String serverAddress, Consumer<Result> progress) {
+		return syncNecessary(serverInfo, serverAddress, Set.of(), progress);
+	}
+
+	static CompletableFuture<Result> syncNecessary(ServerModInfo serverInfo, String serverAddress, Set<String> trustedServerMods, Consumer<Result> progress) {
 		ModSync.LOGGER.info("Starting necessary sync for server {} with {} advertised mods, transfer port {}, server transfers {}", serverAddress, serverInfo.mods().size(), serverInfo.transferPort(), serverInfo.allowServerTransfers());
 		return CompletableFuture.supplyAsync(() -> plan(serverInfo, Mode.NECESSARY))
-			.thenCompose(plan -> runNecessary(plan, serverInfo.minecraftVersion(), serverAddress, serverInfo.transferPort(), serverInfo.allowServerTransfers(), progress));
+			.thenCompose(plan -> runNecessary(plan, serverInfo.minecraftVersion(), serverAddress, serverInfo.transferPort(), serverInfo.allowServerTransfers(), trustedServerMods, progress));
 	}
 
 	static CompletableFuture<Result> fullSync(ServerModInfo serverInfo, String serverAddress) {
@@ -31,15 +36,32 @@ final class ModSyncService {
 	}
 
 	static CompletableFuture<Result> fullSync(ServerModInfo serverInfo, String serverAddress, Consumer<Result> progress) {
-		ModSync.LOGGER.info("Starting full sync for server {} with {} advertised mods, transfer port {}, server transfers {}", serverAddress, serverInfo.mods().size(), serverInfo.transferPort(), serverInfo.allowServerTransfers());
-		if (!serverInfo.allowServerTransfers()) {
-			return CompletableFuture.completedFuture(new Result(false, 0, 0, "server_transfers_disabled", ""));
-		}
-		return CompletableFuture.supplyAsync(() -> plan(serverInfo, Mode.FULL))
-			.thenCompose(plan -> runFull(plan, serverAddress, serverInfo.transferPort(), progress));
+		return fullSync(serverInfo, serverAddress, Set.of(), progress);
 	}
 
-	private static CompletableFuture<Result> runNecessary(Plan plan, String minecraftVersion, String serverAddress, int transferPort, boolean allowServerTransfers, Consumer<Result> progress) {
+	static CompletableFuture<Result> fullSync(ServerModInfo serverInfo, String serverAddress, Set<String> trustedServerMods, Consumer<Result> progress) {
+		ModSync.LOGGER.info("Starting full sync for server {} with {} advertised mods, transfer port {}, server transfers {}", serverAddress, serverInfo.mods().size(), serverInfo.transferPort(), serverInfo.allowServerTransfers());
+		return CompletableFuture.supplyAsync(() -> plan(serverInfo, Mode.FULL))
+			.thenCompose(plan -> runFull(plan, serverInfo.minecraftVersion(), serverAddress, serverInfo.transferPort(), serverInfo.allowServerTransfers(), trustedServerMods, progress));
+	}
+
+	static List<ModEntry> downloadsFor(ServerModInfo serverInfo, boolean fullSync) {
+		return plan(serverInfo, fullSync ? Mode.FULL : Mode.NECESSARY).downloads();
+	}
+
+	static CompletableFuture<List<ModEntry>> serverDownloadsFor(ServerModInfo serverInfo, boolean fullSync) {
+		List<ModEntry> downloads = downloadsFor(serverInfo, fullSync);
+		List<CompletableFuture<Boolean>> checks = downloads.stream()
+			.map(mod -> ModDownloader.existsOnModrinth(mod, serverInfo.minecraftVersion()))
+			.toList();
+		return CompletableFuture.allOf(checks.toArray(CompletableFuture[]::new))
+			.thenApply(ignored -> java.util.stream.IntStream.range(0, downloads.size())
+				.filter(index -> !checks.get(index).join())
+				.mapToObj(downloads::get)
+				.toList());
+	}
+
+	private static CompletableFuture<Result> runNecessary(Plan plan, String minecraftVersion, String serverAddress, int transferPort, boolean allowServerTransfers, Set<String> trustedServerMods, Consumer<Result> progress) {
 		ModSync.LOGGER.info("Necessary sync plan: {} downloads, {} mismatches, {} extras", plan.downloads().size(), plan.mismatches().size(), plan.extras().size());
 		return CompletableFuture.supplyAsync(() -> backupMismatches(plan))
 			.thenCompose(result -> {
@@ -47,28 +69,33 @@ final class ModSyncService {
 					progress.accept(result);
 					return CompletableFuture.completedFuture(result);
 				}
-				return sequence(plan.downloads(), progress, mod -> ModDownloader.downloadFromModrinth(mod, minecraftVersion)
-					.thenCompose(modrinth -> {
-						if (modrinth.success()) {
-							return CompletableFuture.completedFuture(modrinth);
-						}
-						ModSync.LOGGER.info("Modrinth did not provide {} {} during necessary sync ({}: {}). Falling back to server {}",
-							mod.id(), mod.version(), modrinth.messageKey(), emptyToFallback(modrinth.detail(), "no detail"), serverAddress);
-						if (!allowServerTransfers) {
-							ModSync.LOGGER.info("Server download fallback is disabled for {} {}", mod.id(), mod.version());
-							return CompletableFuture.completedFuture(new ModDownloader.Result(false, "server_transfers_disabled", ""));
-						}
-						return ModDownloader.downloadFromServer(mod, serverAddress, transferPort);
-					}));
+				return sequence(plan.downloads(), progress, mod -> downloadWithTrustedFallback(mod, minecraftVersion, serverAddress, transferPort, allowServerTransfers, trustedServerMods));
 			});
 	}
 
-	private static CompletableFuture<Result> runFull(Plan plan, String serverAddress, int transferPort, Consumer<Result> progress) {
+	private static CompletableFuture<Result> runFull(Plan plan, String minecraftVersion, String serverAddress, int transferPort, boolean allowServerTransfers, Set<String> trustedServerMods, Consumer<Result> progress) {
 		ModSync.LOGGER.info("Full sync plan: {} downloads, {} mismatches, {} extras", plan.downloads().size(), plan.mismatches().size(), plan.extras().size());
 		return CompletableFuture.supplyAsync(() -> backupAll(plan))
 			.thenCompose(result -> result.success()
-				? sequence(plan.downloads(), progress, mod -> ModDownloader.downloadFromServer(mod, serverAddress, transferPort))
+				? sequence(plan.downloads(), progress, mod -> downloadWithTrustedFallback(mod, minecraftVersion, serverAddress, transferPort, allowServerTransfers, trustedServerMods))
 				: failed(result, progress));
+	}
+
+	private static CompletableFuture<ModDownloader.Result> downloadWithTrustedFallback(ModEntry mod, String minecraftVersion, String serverAddress, int transferPort, boolean allowServerTransfers, Set<String> trustedServerMods) {
+		return ModDownloader.downloadFromModrinth(mod, minecraftVersion).thenCompose(modrinth -> {
+			if (modrinth.success()) {
+				return CompletableFuture.completedFuture(modrinth);
+			}
+			if (!trustedServerMods.contains(mod.id())) {
+				ModSync.LOGGER.warn("Refusing unconfirmed server fallback for {} {}", mod.id(), mod.version());
+				return CompletableFuture.completedFuture(new ModDownloader.Result(false, "server_download_not_trusted", ""));
+			}
+			ModSync.LOGGER.info("Using user-approved server fallback for {} {} from {}", mod.id(), mod.version(), serverAddress);
+			if (!allowServerTransfers) {
+				return CompletableFuture.completedFuture(new ModDownloader.Result(false, "server_transfers_disabled", ""));
+			}
+			return ModDownloader.downloadFromServer(mod, serverAddress, transferPort);
+		});
 	}
 
 	private static Plan plan(ServerModInfo serverInfo, Mode mode) {

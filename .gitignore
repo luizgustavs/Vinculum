@@ -1,5 +1,7 @@
 # Local/reference files that are not part of the mod source.
-arquivos/
+materiais/
+/PROJECT_MAP.md
+/PLANOS.md
 
 # Gradle and build outputs.
 .gradle/

@@ -1,5 +1,6 @@
 package com.modsync.status;
 
+import com.modsync.JarFilter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,6 +41,9 @@ final class ModFileManager {
 	}
 
 	static void backup(Path path) throws IOException {
+		if (!JarFilter.shouldManage(path)) {
+			return;
+		}
 		Path destination = backupPath(path);
 		try {
 			Files.move(path, destination);
