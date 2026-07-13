@@ -1,10 +1,10 @@
 {
 	"schemaVersion": 1,
-	"id": "modsync",
+	"id": "vinculum",
 	"version": "${version}",
 	"name": "Vinculum",
 	"description": "A Fabric mod for synchronizing Minecraft mods.",
-	"icon": "assets/modsync/icon.png",
+	"icon": "assets/vinculum/icon.png",
 	"authors": [
 		"amovcs"
 	],
@@ -12,13 +12,13 @@
 	"environment": "*",
 	"entrypoints": {
 		"main": [
-			"com.modsync.ModSync"
+			"com.vinculum.Vinculum"
 		]
 	},
 	"mixins": [
-		"modsync.mixins.json",
+		"vinculum.mixins.json",
 		{
-			"config": "modsync.client.mixins.json",
+			"config": "vinculum.client.mixins.json",
 			"environment": "client"
 		}
 	],

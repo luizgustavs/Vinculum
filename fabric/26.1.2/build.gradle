@@ -18,7 +18,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"modsync" {
+		"vinculum" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}

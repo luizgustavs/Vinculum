@@ -28,7 +28,7 @@ Before replacing a mismatched mod, Vinculum moves the old JAR to a `.bak` file. 
 
 ## Configuration
 
-Vinculum creates a `modsync.json` config file in the Fabric config directory.
+Vinculum creates a `vinculum.json` config file in the Fabric config directory.
 
 ```json
 {
@@ -61,7 +61,7 @@ For example:
 }
 ```
 
-Both values can also be overridden with the `modsync.transferPort` and `modsync.allowServerTransfers` system properties, or the `MODSYNC_TRANSFER_PORT` and `MODSYNC_ALLOW_SERVER_TRANSFERS` environment variables.
+Both values can also be overridden with the `vinculum.transferPort` and `vinculum.allowServerTransfers` system properties, or the `VINCULUM_TRANSFER_PORT` and `VINCULUM_ALLOW_SERVER_TRANSFERS` environment variables.
 
 ## Requirements
 
