@@ -1,6 +1,6 @@
 # Vinculum
 
-Current version: **1.0.1** for Minecraft 26.1.2.
+Current version: **1.0.2** for Minecraft 26.1, 26.1.1, 26.1.2, and 26.2.
 
 Vinculum is a Fabric mod that helps players keep their Minecraft mod list aligned with the servers they join.
 
@@ -65,10 +65,11 @@ Both values can also be overridden with the `vinculum.transferPort` and `vinculu
 
 ## Requirements
 
-- Minecraft 26.1.2
+- Minecraft 26.1, 26.1.1, 26.1.2, or 26.2
 - Fabric Loader 0.19.3 or newer
-- Fabric API
 - Java 25 or newer
+
+Fabric API is not required.
 
 ## Building
 

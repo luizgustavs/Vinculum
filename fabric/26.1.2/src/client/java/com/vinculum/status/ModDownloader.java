@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.loader.api.FabricLoader;
 
 final class ModDownloader {
-	private static final String USER_AGENT = "Vinculum/1.0.1 (Minecraft Fabric mod)";
+	private static final String USER_AGENT = "Vinculum/1.0.2 (Minecraft Fabric mod)";
 	// Keep the integration available while CurseForge client authentication is investigated.
 	private static final boolean CURSEFORGE_DOWNLOADS_ENABLED = false;
 	private static final int CURSEFORGE_GAME_ID = 432;
