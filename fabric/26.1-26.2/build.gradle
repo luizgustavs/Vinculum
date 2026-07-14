@@ -14,6 +14,9 @@ def supportedMinecraftVersionsLabel = supportedMinecraftVersions.size() > 1
 	? "${supportedMinecraftVersions.first()}_${supportedMinecraftVersions.last()}"
 	: supportedMinecraftVersions.join()
 def supportedMinecraftVersionsJsonItems = supportedMinecraftVersions.join('\", \"')
+def embedResourceLoader = providers.gradleProperty("embed_resource_loader")
+	.map { it.toBoolean() }
+	.getOrElse(false)
 
 tasks.withType(org.gradle.api.tasks.bundling.AbstractArchiveTask).configureEach {
 	archiveBaseName = project.name
@@ -45,7 +48,23 @@ dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	if (embedResourceLoader) {
+		include(implementation(fabricApi.module("fabric-api-base", project.fabric_api_version)))
+		include(implementation(fabricApi.module("fabric-resource-loader-v1", project.fabric_api_version)))
+	}
 	
+}
+
+tasks.register("build26_2", GradleBuild) {
+	group = "build"
+	description = "Builds the Minecraft 26.2 artifact from the shared source tree."
+	tasks = ["build"]
+	startParameter.projectProperties = gradle.startParameter.projectProperties + [
+		minecraft_version: project.minecraft_26_2_version,
+		supported_minecraft_versions: project.minecraft_26_2_version,
+		fabric_api_version: project.fabric_api_26_2_version,
+		embed_resource_loader: "true"
+	]
 }
 
 processResources {

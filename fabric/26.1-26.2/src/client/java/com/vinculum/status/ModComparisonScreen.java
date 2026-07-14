@@ -57,7 +57,7 @@ public final class ModComparisonScreen extends Screen {
 			return false;
 		}
 
-		Minecraft.getInstance().setScreen(new ModComparisonScreen(parent, serverInfo, serverAddress, comparisons));
+		Minecraft.getInstance().setScreenAndShow(new ModComparisonScreen(parent, serverInfo, serverAddress, comparisons));
 		return true;
 	}
 
@@ -89,7 +89,6 @@ public final class ModComparisonScreen extends Screen {
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
 		graphics.fill(0, 0, this.width, this.height, 0xFF101010);
-		this.minecraft.gui.extractDeferredSubtitles();
 	}
 
 	@Override
@@ -109,7 +108,7 @@ public final class ModComparisonScreen extends Screen {
 
 	@Override
 	public void onClose() {
-		this.minecraft.setScreen(this.parent);
+		this.minecraft.setScreenAndShow(this.parent);
 	}
 
 	private void download(Comparison comparison) {
@@ -117,7 +116,7 @@ public final class ModComparisonScreen extends Screen {
 			return;
 		}
 		if (comparison.modrinthState == ModrinthState.UNAVAILABLE) {
-			this.minecraft.setScreen(new ServerDownloadWarningScreen(
+			this.minecraft.setScreenAndShow(new ServerDownloadWarningScreen(
 				this,
 				this.serverAddress,
 				List.of(comparison.serverMod()),
@@ -176,7 +175,7 @@ public final class ModComparisonScreen extends Screen {
 				this.runSync(fullSync, trustedMods);
 				return;
 			}
-			this.minecraft.setScreen(new ServerDownloadWarningScreen(
+			this.minecraft.setScreenAndShow(new ServerDownloadWarningScreen(
 				this,
 				this.serverAddress,
 				serverMods,

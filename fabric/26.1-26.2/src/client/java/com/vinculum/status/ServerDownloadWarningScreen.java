@@ -35,7 +35,7 @@ final class ServerDownloadWarningScreen extends Screen {
 			.bounds(this.width / 2 - 204, this.height - 32, 200, 20)
 			.build());
 		this.addRenderableWidget(Button.builder(Component.translatable("vinculum.warning.trust_download"), button -> {
-			this.minecraft.setScreen(this.parent);
+			this.minecraft.setScreenAndShow(this.parent);
 			this.trustAndDownload.run();
 		})
 			.bounds(this.width / 2 + 4, this.height - 32, 200, 20)
@@ -50,7 +50,6 @@ final class ServerDownloadWarningScreen extends Screen {
 	@Override
 	public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
 		graphics.fill(0, 0, this.width, this.height, 0xFF101010);
-		this.minecraft.gui.extractDeferredSubtitles();
 	}
 
 	@Override
@@ -64,7 +63,7 @@ final class ServerDownloadWarningScreen extends Screen {
 
 	@Override
 	public void onClose() {
-		this.minecraft.setScreen(this.parent);
+		this.minecraft.setScreenAndShow(this.parent);
 		this.cancel.run();
 	}
 

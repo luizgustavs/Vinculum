@@ -73,13 +73,15 @@ Fabric API is not required.
 
 ## Building
 
-From `fabric/26.1.2`, run:
+The shared source tree for every supported Minecraft version is in `fabric/26.1-26.2`. From that directory, run:
 
 ```shell
 ./gradlew build
 ```
 
-On Windows, use `gradlew.bat build`. The testable remapped mod is generated in `fabric/26.1.2/build/libs/`; use the JAR without the `-sources` suffix.
+This builds the artifact for Minecraft 26.1, 26.1.1, and 26.1.2. Run `./gradlew build26_2` to build the Minecraft 26.2 artifact from the same source tree. On Windows, the root-level `build.bat` cleans and builds both targets in one step.
+
+The testable remapped JARs are generated in `fabric/26.1-26.2/build/libs/`; use the files without the `-sources` suffix.
 
 ## License
 
